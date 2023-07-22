@@ -8,11 +8,13 @@ from multiprocessing import Process, Queue, Event
 
 import numpy as np
 import cv2
+import psutil
 
 from openai_vpt.agent import ACTION_TRANSFORMER_KWARGS, resize_image, AGENT_RESOLUTION
 from openai_vpt.lib.actions import ActionTransformer
 
 QUEUE_TIMEOUT = 10
+DEBUG_LOG = False
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), "cursors", "mouse_cursor_white_16x16.png")
 
@@ -162,6 +164,10 @@ def data_loader_worker(tasks_queue, output_queue, quit_workers_event):
         if task is None:
             break
         trajectory_id, video_path, json_path = task
+
+        # Print the video name before processing
+        print(f"[START] Queue size: {tasks_queue.qsize()}, Processing video: {os.path.basename(video_path)}")
+
         video = cv2.VideoCapture(video_path)
         # Note: In some recordings, the game seems to start
         #       with attack always down from the beginning, which
@@ -179,6 +185,9 @@ def data_loader_worker(tasks_queue, output_queue, quit_workers_event):
             json_data = json.loads(json_data)
 
         for i in range(len(json_data)):
+            # ToDo: Remove DEBUG print
+            if DEBUG_LOG:
+                print(f"Processing step {i + 1}/{len(json_data)}")
             if quit_workers_event.is_set():
                 break
             step_data = json_data[i]
@@ -223,6 +232,7 @@ def data_loader_worker(tasks_queue, output_queue, quit_workers_event):
             else:
                 print(f"Could not read frame from video {video_path}")
         video.release()
+        print(f"[END] video: {os.path.basename(video_path)}")
         # Signal that this task is done
         # Yes we are using "None"s to tell when worker is done
         # and when individual work-items are done...
@@ -247,7 +257,7 @@ class DataLoader:
     - Loads up individual files as trajectory files (i.e. if a trajectory is split into multiple files,
       this code will load it up as a separate item).
     """
-    def __init__(self, dataset_dir, n_workers=8, batch_size=8, n_epochs=1, max_queue_size=8):
+    def __init__(self, dataset_dir, n_workers=8, batch_size=8, n_epochs=1, max_queue_size=2048):
         assert n_workers >= batch_size, "Number of workers must be equal or greater than batch size"
         self.dataset_dir = dataset_dir
         self.n_workers = n_workers
@@ -308,12 +318,20 @@ class DataLoader:
         for i in range(self.batch_size):
             workitem = self.output_queues[self.n_steps_processed % self.n_workers].get(timeout=QUEUE_TIMEOUT)
             if workitem is None:
+                print(f"workitem: {len(self.output_queues)}")
+                self.output_queues.pop(self.n_steps_processed % self.n_workers)
+                # self.n_steps_processed += 1
+                self.n_workers -= 1
+                if self.n_workers == 0:
+                    raise StopIteration()
+                continue
                 # Stop iteration when first worker runs out of work to do.
                 # Yes, this has a chance of cutting out a lot of the work,
                 # but this ensures batches will remain diverse, instead
                 # of having bad ones in the end where potentially
                 # one worker outputs all samples to the same batch.
-                raise StopIteration()
+                # Stop processing if all workers have finished
+                # raise StopIteration()
             trajectory_id, frame, action = workitem
             batch_frames.append(frame)
             batch_actions.append(action)

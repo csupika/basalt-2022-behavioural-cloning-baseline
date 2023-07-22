@@ -3,7 +3,7 @@
 #       to perform training.
 #       This will fit inside even smaller GPUs (tested on 8GB one),
 #       but is slow.
-
+import datetime
 from argparse import ArgumentParser
 import pickle
 import time
@@ -16,20 +16,16 @@ import numpy as np
 from openai_vpt.agent import PI_HEAD_KWARGS, MineRLAgent
 from data_loader import DataLoader
 from openai_vpt.lib.tree_util import tree_map
+from random_word import RandomWords
 
-# Originally this code was designed for a small dataset of ~20 demonstrations per task.
-# The settings might not be the best for the full BASALT dataset (thousands of demonstrations).
-# Use this flag to switch between the two settings
-USING_FULL_DATASET = True
-
-EPOCHS = 1 if USING_FULL_DATASET else 2
+EPOCHS = 1
 # Needs to be <= number of videos
-BATCH_SIZE = 64 if USING_FULL_DATASET else 16
+BATCH_SIZE = 5
 # Ideally more than batch size to create
 # variation in datasets (otherwise, you will
 # get a bunch of consecutive samples)
 # Decrease this (and batch_size) if you run out of memory
-N_WORKERS = 100 if USING_FULL_DATASET else 20
+N_WORKERS = 10
 DEVICE = "cuda"
 
 LOSS_REPORT_RATE = 100
@@ -43,7 +39,46 @@ WEIGHT_DECAY = 0.0
 KL_LOSS_WEIGHT = 1.0
 MAX_GRAD_NORM = 5.0
 
-MAX_BATCHES = 2000 if USING_FULL_DATASET else int(1e9)
+# 10 000 was enough for 69 videos,  1699.66 with 8 workers
+MAX_BATCHES = 1000000
+DEBUG_LOG = False
+
+variables = [
+    ("EPOCHS", EPOCHS),
+    ("BATCH_SIZE", BATCH_SIZE),
+    ("LEARNING_RATE", LEARNING_RATE),
+    ("WEIGHT_DECAY", WEIGHT_DECAY),
+    ("KL_LOSS_WEIGHT", KL_LOSS_WEIGHT),
+    ("MAX_GRAD_NORM", MAX_GRAD_NORM),
+    ("MAX_BATCHES", MAX_BATCHES),
+    ("N_WORKERS", N_WORKERS),
+    ("DEVICE", DEVICE),
+]
+
+def log_parameters(out_weights_name, time_spent, data_dir, sample_size, remaining_rec, exception=None):
+
+    with open("train/_model_parameters.txt", "a+") as file:
+        now = datetime.datetime.now()
+        timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+        file.write(f"┌───────────────────────────────────────────────┐\n")
+        file.write(f'│{out_weights_name : <46} │\n')
+        file.write(f"│                                               │\n")
+        file.write(f'│    TRAINING TIME = {time_spent: <26} │\n')
+        # Write each variable name and its value to the file
+        for variable in variables:
+            name, value = variable
+            to_print = f"{name} = {value}"
+            file.write(f'│    {to_print : <42} │\n')
+        file.write(f"│                                               │\n")
+        file.write(f'│    TIMESTAMP = {timestamp: <30} │\n')
+        file.write(f'│    DATA DIR = {data_dir: <31} │\n')
+        file.write(f'│    SAMPLE SIZE = {sample_size: <29}│\n')
+        file.write(f'│    REMAINING REC = {remaining_rec: <27}│\n')
+        if exception:
+            file.write(f"│ EXCEPTION:                                    │\n")
+            file.write(f"| {type(exception).__name__} was raised. {exception} \n")
+        file.write("└───────────────────────────────────────────────┘\n\n")
+
 
 def load_model_parameters(path_to_model_file):
     agent_parameters = pickle.load(open(path_to_model_file, "rb"))
@@ -52,7 +87,9 @@ def load_model_parameters(path_to_model_file):
     pi_head_kwargs["temperature"] = float(pi_head_kwargs["temperature"])
     return policy_kwargs, pi_head_kwargs
 
-def behavioural_cloning_train(data_dir, in_model, in_weights, out_weights):
+def behavioural_cloning_train(data_dir, in_model, in_weights):
+    r = RandomWords()
+    out_weights = "train/" + r.get_random_word() + "_" + r.get_random_word() + ".weights"
     agent_policy_kwargs, agent_pi_head_kwargs = load_model_parameters(in_model)
 
     # To create model with the right environment.
@@ -94,6 +131,9 @@ def behavioural_cloning_train(data_dir, in_model, in_weights, out_weights):
         batch_size=BATCH_SIZE,
         n_epochs=EPOCHS,
     )
+    # ToDo: Remove debug logs
+    if DEBUG_LOG:
+        print("DataLoader initialized")
 
     start_time = time.time()
 
@@ -105,76 +145,81 @@ def behavioural_cloning_train(data_dir, in_model, in_weights, out_weights):
     dummy_first = th.from_numpy(np.array((False,))).to(DEVICE)
 
     loss_sum = 0
-    for batch_i, (batch_images, batch_actions, batch_episode_id) in enumerate(data_loader):
-        batch_loss = 0
-        for image, action, episode_id in zip(batch_images, batch_actions, batch_episode_id):
-            if image is None and action is None:
-                # A work-item was done. Remove hidden state
-                if episode_id in episode_hidden_states:
-                    removed_hidden_state = episode_hidden_states.pop(episode_id)
-                    del removed_hidden_state
-                continue
+    exception = None
+    try:
+        for batch_i, (batch_images, batch_actions, batch_episode_id) in enumerate(data_loader):
+            batch_loss = 0
+            for image, action, episode_id in zip(batch_images, batch_actions, batch_episode_id):
+                if image is None and action is None:
+                    # A work-item was done. Remove hidden state
+                    if episode_id in episode_hidden_states:
+                        removed_hidden_state = episode_hidden_states.pop(episode_id)
+                        del removed_hidden_state
+                    continue
 
-            agent_action = agent._env_action_to_agent(action, to_torch=True, check_if_null=True)
-            if agent_action is None:
-                # Action was null
-                continue
+                agent_action = agent._env_action_to_agent(action, to_torch=True, check_if_null=True)
+                if agent_action is None:
+                    # Action was null
+                    continue
 
-            agent_obs = agent._env_obs_to_agent({"pov": image})
-            if episode_id not in episode_hidden_states:
-                episode_hidden_states[episode_id] = policy.initial_state(1)
-            agent_state = episode_hidden_states[episode_id]
+                agent_obs = agent._env_obs_to_agent({"pov": image})
+                if episode_id not in episode_hidden_states:
+                    episode_hidden_states[episode_id] = policy.initial_state(1)
+                agent_state = episode_hidden_states[episode_id]
 
-            pi_distribution, _, new_agent_state = policy.get_output_for_observation(
-                agent_obs,
-                agent_state,
-                dummy_first
-            )
-
-            with th.no_grad():
-                original_pi_distribution, _, _ = original_policy.get_output_for_observation(
+                pi_distribution, _, new_agent_state = policy.get_output_for_observation(
                     agent_obs,
                     agent_state,
                     dummy_first
                 )
 
-            log_prob  = policy.get_logprob_of_action(pi_distribution, agent_action)
-            kl_div = policy.get_kl_of_action_dists(pi_distribution, original_pi_distribution)
+                with th.no_grad():
+                    original_pi_distribution, _, _ = original_policy.get_output_for_observation(
+                        agent_obs,
+                        agent_state,
+                        dummy_first
+                    )
 
-            # Make sure we do not try to backprop through sequence
-            # (fails with current accumulation)
-            new_agent_state = tree_map(lambda x: x.detach(), new_agent_state)
-            episode_hidden_states[episode_id] = new_agent_state
+                log_prob  = policy.get_logprob_of_action(pi_distribution, agent_action)
+                kl_div = policy.get_kl_of_action_dists(pi_distribution, original_pi_distribution)
 
-            # Finally, update the agent to increase the probability of the
-            # taken action.
-            # Remember to take mean over batch losses
-            loss = (-log_prob + KL_LOSS_WEIGHT * kl_div) / BATCH_SIZE
-            batch_loss += loss.item()
-            loss.backward()
+                # Make sure we do not try to backprop through sequence
+                # (fails with current accumulation)
+                new_agent_state = tree_map(lambda x: x.detach(), new_agent_state)
+                episode_hidden_states[episode_id] = new_agent_state
 
-        th.nn.utils.clip_grad_norm_(trainable_parameters, MAX_GRAD_NORM)
-        optimizer.step()
-        optimizer.zero_grad()
+                # Finally, update the agent to increase the probability of the
+                # taken action.
+                # Remember to take mean over batch losses
+                loss = (-log_prob + KL_LOSS_WEIGHT * kl_div) / BATCH_SIZE
+                batch_loss += loss.item()
+                loss.backward()
 
-        loss_sum += batch_loss
-        if batch_i % LOSS_REPORT_RATE == 0:
-            time_since_start = time.time() - start_time
-            print(f"Time: {time_since_start:.2f}, Batches: {batch_i}, Avrg loss: {loss_sum / LOSS_REPORT_RATE:.4f}")
-            loss_sum = 0
+            th.nn.utils.clip_grad_norm_(trainable_parameters, MAX_GRAD_NORM)
+            optimizer.step()
+            optimizer.zero_grad()
 
-        if batch_i > MAX_BATCHES:
-            break
+            loss_sum += batch_loss
+            if batch_i % LOSS_REPORT_RATE == 0:
+                time_since_start = time.time() - start_time
+                print(f"Time: {time_since_start:.2f}, Batches: {batch_i}, Avrg loss: {loss_sum / LOSS_REPORT_RATE:.4f}")
+                loss_sum = 0
 
-    state_dict = policy.state_dict()
-    th.save(state_dict, out_weights)
+            if batch_i > MAX_BATCHES:
+                print("Max batches reached")
+                break
+    finally:
+        state_dict = policy.state_dict()
+        th.save(state_dict, out_weights)
+        remaining_rec = data_loader.task_queue.qsize()
+        log_parameters(out_weights, time.time() - start_time, data_dir, len(data_loader.demonstration_tuples), remaining_rec,exception)
+        print(">>>>DONE<<<<")
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--data-dir", type=str, required=True, help="Path to the directory containing recordings to be trained on")
     parser.add_argument("--in-model", required=True, type=str, help="Path to the .model file to be finetuned")
     parser.add_argument("--in-weights", required=True, type=str, help="Path to the .weights file to be finetuned")
-    parser.add_argument("--out-weights", required=True, type=str, help="Path where finetuned weights will be saved")
 
     args = parser.parse_args()
-    behavioural_cloning_train(args.data_dir, args.in_model, args.in_weights, args.out_weights)
+    behavioural_cloning_train(args.data_dir, args.in_model, args.in_weights)

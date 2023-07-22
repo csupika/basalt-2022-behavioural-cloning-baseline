@@ -1,18 +1,12 @@
-# A script to download OpenAI contractor data or BASALT datasets
-# using the shared .json files (index file).
-#
-# Json files are in format:
-# {"basedir": <prefix>, "relpaths": [<relpath>, ...]}
-#
-# The script will download all files in the relpaths list,
-# or maximum of set number of demonstrations,
-# to a specified directory.
-#
-
 import argparse
 import urllib.request
 import os
-import glob, os, cv2, json
+import glob
+import cv2
+import json
+import threading
+from collections import namedtuple
+from concurrent.futures import ThreadPoolExecutor
 
 parser = argparse.ArgumentParser(description="Download OpenAI contractor datasets")
 parser.add_argument("--json-file", type=str, required=True, help="Path to the index .json file")
@@ -41,6 +35,30 @@ def relpaths_to_download(relpaths, output_dir):
     print('total:', len(relpaths), '| exist:', len(non_defect), '| downloading:', len(diff_to_download))
     return diff_to_download
 
+def download_file(url, jsonl_url, outpath, jsonl_outpath, percent_done):
+    print(f"[{percent_done:.0f}%] Downloading {outpath}")
+    try:
+        urllib.request.urlretrieve(url, outpath)
+        urllib.request.urlretrieve(jsonl_url, jsonl_outpath)
+    except Exception as e:
+        print(f"\tError downloading {url}: {e}. Moving on\n")
+
+
+def download_files(relpaths, basedir, output_dir):
+    with ThreadPoolExecutor(max_workers=100) as executor:
+        for i, relpath in enumerate(relpaths):
+            url = basedir + relpath
+            filename = os.path.basename(relpath)
+            outpath = os.path.join(output_dir, filename)
+            jsonl_url = url.replace(".mp4", ".jsonl")
+            jsonl_filename = filename.replace(".mp4", ".jsonl")
+            jsonl_outpath = os.path.join(output_dir, jsonl_filename)
+
+            percent_done = 100 * i / len(relpaths)
+            executor.submit(download_file, url, jsonl_url, outpath, jsonl_outpath, percent_done)
+
+
+
 def main(args):
     with open(args.json_file, "r") as f:
         data = f.read()
@@ -54,29 +72,13 @@ def main(args):
         os.makedirs(args.output_dir)
     relpaths = relpaths_to_download(relpaths, args.output_dir)
 
-    for i, relpath in enumerate(relpaths):
-        url = basedir + relpath
-        filename = os.path.basename(relpath)
-        outpath = os.path.join(args.output_dir, filename)
-        percent_done = 100 * i / len(relpaths)
-        print(f"[{percent_done:.0f}%] Downloading {outpath}")
-        try:
-            urllib.request.urlretrieve(url, outpath)
-        except Exception as e:
-            print(f"\tError downloading {url}: {e}. Moving on")
-            continue
-
-        # Also download corresponding .jsonl file
-        jsonl_url = url.replace(".mp4", ".jsonl")
-        jsonl_filename = filename.replace(".mp4", ".jsonl")
-        jsonl_outpath = os.path.join(args.output_dir, jsonl_filename)
-        try:
-            urllib.request.urlretrieve(jsonl_url, jsonl_outpath)
-        except Exception as e:
-            print(f"\tError downloading {jsonl_url}: {e}. Cleaning up mp4")
-            os.remove(outpath)
-
+    download_files(relpaths, basedir, args.output_dir)
 
 if __name__ == "__main__":
-    args = parser.parse_args()
+    # args = parser.parse_args()
+
+    Args = namedtuple('Args', ['json_file', 'num_demos', 'output_dir'])
+    args = Args(json_file="find-cave-Jul-28.json", num_demos=10, output_dir="../data/10_data/")
+    # args = Args(json_file="find-cave-Jul-28.json", num_demos=100, output_dir="/mnt/data/plc2000/MineRLBasaltFindCave-v0/")
     main(args)
+    print("#########################< Done >#########################")
