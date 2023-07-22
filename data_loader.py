@@ -15,6 +15,7 @@ from openai_vpt.lib.actions import ActionTransformer
 
 QUEUE_TIMEOUT = 10
 DEBUG_LOG = False
+EARLY_STOPPING_CONDITION = True
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), "cursors", "mouse_cursor_white_16x16.png")
 
@@ -318,20 +319,21 @@ class DataLoader:
         for i in range(self.batch_size):
             workitem = self.output_queues[self.n_steps_processed % self.n_workers].get(timeout=QUEUE_TIMEOUT)
             if workitem is None:
-                print(f"workitem: {len(self.output_queues)}")
-                self.output_queues.pop(self.n_steps_processed % self.n_workers)
-                # self.n_steps_processed += 1
-                self.n_workers -= 1
-                if self.n_workers == 0:
+                if not EARLY_STOPPING_CONDITION:
+                    print(f"workitem: {len(self.output_queues)}")
+                    self.output_queues.pop(self.n_steps_processed % self.n_workers)
+                    self.n_workers -= 1
+                    if self.n_workers == 0:
+                        raise StopIteration()
+                    continue
+                else:
+                    # Stop iteration when first worker runs out of work to do.
+                    # Yes, this has a chance of cutting out a lot of the work,
+                    # but this ensures batches will remain diverse, instead
+                    # of having bad ones in the end where potentially
+                    # one worker outputs all samples to the same batch.
+                    # Stop processing if all workers have finished
                     raise StopIteration()
-                continue
-                # Stop iteration when first worker runs out of work to do.
-                # Yes, this has a chance of cutting out a lot of the work,
-                # but this ensures batches will remain diverse, instead
-                # of having bad ones in the end where potentially
-                # one worker outputs all samples to the same batch.
-                # Stop processing if all workers have finished
-                # raise StopIteration()
             trajectory_id, frame, action = workitem
             batch_frames.append(frame)
             batch_actions.append(action)
