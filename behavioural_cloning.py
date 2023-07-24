@@ -20,13 +20,17 @@ from random_word import RandomWords
 
 EPOCHS = 1
 # Needs to be <= number of videos
-BATCH_SIZE = 5
+BATCH_SIZE = 64
 # Ideally more than batch size to create
 # variation in datasets (otherwise, you will
 # get a bunch of consecutive samples)
 # Decrease this (and batch_size) if you run out of memory
-N_WORKERS = 10
-DEVICE = "cuda"
+N_WORKERS = 99
+DEVICE = "cuda:3"
+
+# Has to be a decimal [0; 1]
+MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE = 0.1
+
 
 LOSS_REPORT_RATE = 100
 
@@ -40,12 +44,12 @@ KL_LOSS_WEIGHT = 1.0
 MAX_GRAD_NORM = 5.0
 
 # 10 000 was enough for 69 videos,  1699.66 with 8 workers
-MAX_BATCHES = 1000000
-DEBUG_LOG = False
+MAX_BATCHES = 10000000000000000000000000000000000000000000
 
 variables = [
     ("EPOCHS", EPOCHS),
     ("BATCH_SIZE", BATCH_SIZE),
+    ("MIN_ACTIVE_QUEUES %", MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE),
     ("LEARNING_RATE", LEARNING_RATE),
     ("WEIGHT_DECAY", WEIGHT_DECAY),
     ("KL_LOSS_WEIGHT", KL_LOSS_WEIGHT),
@@ -55,7 +59,7 @@ variables = [
     ("DEVICE", DEVICE),
 ]
 
-def log_parameters(out_weights_name, time_spent, data_dir, sample_size, remaining_rec, exception=None):
+def log_parameters(out_weights_name, time_spent, data_dir, sample_size, remaining_rec, start_timestamp, batches_done, exception=None):
 
     with open("train/_model_parameters.txt", "a+") as file:
         now = datetime.datetime.now()
@@ -71,6 +75,8 @@ def log_parameters(out_weights_name, time_spent, data_dir, sample_size, remainin
             file.write(f'│    {to_print : <42} │\n')
         file.write(f"│                                               │\n")
         file.write(f'│    TIMESTAMP = {timestamp: <30} │\n')
+        file.write(f'│    BATCHES  = {batches_done: <31} │\n')
+        file.write(f'│    START TIME = {start_timestamp: <29} │\n')
         file.write(f'│    DATA DIR = {data_dir: <31} │\n')
         file.write(f'│    SAMPLE SIZE = {sample_size: <29}│\n')
         file.write(f'│    REMAINING REC = {remaining_rec: <27}│\n')
@@ -88,6 +94,9 @@ def load_model_parameters(path_to_model_file):
     return policy_kwargs, pi_head_kwargs
 
 def behavioural_cloning_train(data_dir, in_model, in_weights):
+    now = datetime.datetime.now()
+    start_timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Start time: {start_timestamp}")
     r = RandomWords()
     out_weights = "train/" + r.get_random_word() + "_" + r.get_random_word() + ".weights"
     agent_policy_kwargs, agent_pi_head_kwargs = load_model_parameters(in_model)
@@ -130,10 +139,8 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
         n_workers=N_WORKERS,
         batch_size=BATCH_SIZE,
         n_epochs=EPOCHS,
+        min_required_queues=int(N_WORKERS * MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE)
     )
-    # ToDo: Remove debug logs
-    if DEBUG_LOG:
-        print("DataLoader initialized")
 
     start_time = time.time()
 
@@ -146,9 +153,11 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
 
     loss_sum = 0
     exception = None
+    batches_done = 0
     try:
         for batch_i, (batch_images, batch_actions, batch_episode_id) in enumerate(data_loader):
             batch_loss = 0
+            batches_done = batch_i
             for image, action, episode_id in zip(batch_images, batch_actions, batch_episode_id):
                 if image is None and action is None:
                     # A work-item was done. Remove hidden state
@@ -208,11 +217,17 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
             if batch_i > MAX_BATCHES:
                 print("Max batches reached")
                 break
+
+    except Exception as e:
+        print(f"EXCEPTION WAS RAISED {type(e).__name__}")
+        exception = e
+    
     finally:
+        data_loader.__del__()
         state_dict = policy.state_dict()
         th.save(state_dict, out_weights)
         remaining_rec = data_loader.task_queue.qsize()
-        log_parameters(out_weights, time.time() - start_time, data_dir, len(data_loader.demonstration_tuples), remaining_rec,exception)
+        log_parameters(out_weights, time.time() - start_time, data_dir, len(data_loader.demonstration_tuples), remaining_rec, start_timestamp, batches_done, exception)
         print(">>>>DONE<<<<")
 
 if __name__ == "__main__":
@@ -223,3 +238,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     behavioural_cloning_train(args.data_dir, args.in_model, args.in_weights)
+
