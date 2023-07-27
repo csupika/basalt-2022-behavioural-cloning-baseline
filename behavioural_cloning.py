@@ -8,6 +8,10 @@ from argparse import ArgumentParser
 import pickle
 import time
 
+import os
+import logging
+import datetime
+
 import gym
 import minerl
 import torch as th
@@ -20,19 +24,19 @@ from random_word import RandomWords
 
 EPOCHS = 1
 # Needs to be <= number of videos
-BATCH_SIZE = 64
+BATCH_SIZE = 16
 # Ideally more than batch size to create
 # variation in datasets (otherwise, you will
 # get a bunch of consecutive samples)
 # Decrease this (and batch_size) if you run out of memory
-N_WORKERS = 99
+N_WORKERS = 30
 DEVICE = "cuda:3"
+#DEVICE_2 = "cuda:2"
 
 # Has to be a decimal [0; 1]
 MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE = 0.1
 
-
-LOSS_REPORT_RATE = 100
+LOSS_REPORT_RATE = 5
 
 # Tuned with bit of trial and error
 LEARNING_RATE = 0.000181
@@ -44,7 +48,7 @@ KL_LOSS_WEIGHT = 1.0
 MAX_GRAD_NORM = 5.0
 
 # 10 000 was enough for 69 videos,  1699.66 with 8 workers
-MAX_BATCHES = 10000000000000000000000000000000000000000000
+MAX_BATCHES = int(1e9)
 
 variables = [
     ("EPOCHS", EPOCHS),
@@ -56,16 +60,17 @@ variables = [
     ("MAX_GRAD_NORM", MAX_GRAD_NORM),
     ("MAX_BATCHES", MAX_BATCHES),
     ("N_WORKERS", N_WORKERS),
-    ("DEVICE", DEVICE),
+    ("DEVICES", DEVICE),
 ]
 
-def log_parameters(out_weights_name, time_spent, data_dir, sample_size, remaining_rec, start_timestamp, batches_done, exception=None):
 
+def log_parameters(training_name, time_spent, data_dir, sample_size, remaining_rec, start_timestamp, batches_done,
+                   exception=None):
     with open("train/_model_parameters.txt", "a+") as file:
         now = datetime.datetime.now()
         timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
         file.write(f"┌───────────────────────────────────────────────┐\n")
-        file.write(f'│{out_weights_name : <46} │\n')
+        file.write(f'│{training_name : <46} │\n')
         file.write(f"│                                               │\n")
         file.write(f'│    TRAINING TIME = {time_spent: <26} │\n')
         # Write each variable name and its value to the file
@@ -93,13 +98,23 @@ def load_model_parameters(path_to_model_file):
     pi_head_kwargs["temperature"] = float(pi_head_kwargs["temperature"])
     return policy_kwargs, pi_head_kwargs
 
+
 def behavioural_cloning_train(data_dir, in_model, in_weights):
-    now = datetime.datetime.now()
-    start_timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Start time: {start_timestamp}")
+    time_now = datetime.datetime.now()
+    start_timestamp = time_now.strftime("%Y-%m-%d %H:%M:%S")
     r = RandomWords()
-    out_weights = "train/" + r.get_random_word() + "_" + r.get_random_word() + ".weights"
+    training_name = r.get_random_word() + "_" + r.get_random_word()
+    out_weights = "train/" + training_name + ".weights"
     agent_policy_kwargs, agent_pi_head_kwargs = load_model_parameters(in_model)
+
+    # Logging
+    logs_folder = "logs/train"  # Specify the folder for logs
+    os.makedirs(logs_folder, exist_ok=True)  # Create the logs folder if it doesn't exist
+    setup_logging(logs_folder, time_now, training_name)
+
+    # Print logging details
+    logging.info(f"Training name: {training_name}")
+    logging.info(f"Start time: {start_timestamp}")
 
     # To create model with the right environment.
     # All basalt environments have the same settings, so any of them works here
@@ -108,7 +123,8 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
     agent.load_weights(in_weights)
 
     # Create a copy which will have the original parameters
-    original_agent = MineRLAgent(env, device=DEVICE, policy_kwargs=agent_policy_kwargs, pi_head_kwargs=agent_pi_head_kwargs)
+    original_agent = MineRLAgent(env, device=DEVICE, policy_kwargs=agent_policy_kwargs,
+                                 pi_head_kwargs=agent_pi_head_kwargs)
     original_agent.load_weights(in_weights)
     env.close()
 
@@ -189,7 +205,7 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
                         dummy_first
                     )
 
-                log_prob  = policy.get_logprob_of_action(pi_distribution, agent_action)
+                log_prob = policy.get_logprob_of_action(pi_distribution, agent_action)
                 kl_div = policy.get_kl_of_action_dists(pi_distribution, original_pi_distribution)
 
                 # Make sure we do not try to backprop through sequence
@@ -211,31 +227,45 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
             loss_sum += batch_loss
             if batch_i % LOSS_REPORT_RATE == 0:
                 time_since_start = time.time() - start_time
-                print(f"Time: {time_since_start:.2f}, Batches: {batch_i}, Avrg loss: {loss_sum / LOSS_REPORT_RATE:.4f}")
+                logging.info(
+                    f"Time: {time_since_start:.2f}, Batches: {batch_i}, Avrg loss: {loss_sum / LOSS_REPORT_RATE:.4f}")
                 loss_sum = 0
 
             if batch_i > MAX_BATCHES:
-                print("Max batches reached")
+                logging.info("[MAX] Max batches reached")
                 break
 
     except Exception as e:
-        print(f"EXCEPTION WAS RAISED {type(e).__name__}")
+        logging.exception(f"EXCEPTION WAS RAISED {type(e).__name__}")
         exception = e
-    
+
     finally:
         data_loader.__del__()
         state_dict = policy.state_dict()
-        th.save(state_dict, out_weights)
         remaining_rec = data_loader.task_queue.qsize()
-        log_parameters(out_weights, time.time() - start_time, data_dir, len(data_loader.demonstration_tuples), remaining_rec, start_timestamp, batches_done, exception)
-        print(">>>>DONE<<<<")
+        th.save(state_dict, out_weights)
+        log_parameters(training_name, time.time() - start_time, data_dir, len(data_loader.demonstration_tuples),
+                       remaining_rec, start_timestamp, batches_done, exception)
+        logging.info(">>>>DONE<<<<")
+
+
+def setup_logging(logs_folder, time_now, training_name):
+    log_format = "%(asctime)s [%(levelname)s] %(message)s"
+    logging.basicConfig(
+        handlers=[logging.FileHandler(f"{logs_folder}/log_{time_now.strftime('%Y%m%d_%H%M%S')}_{training_name}.txt"),
+                  logging.StreamHandler()],
+        level=logging.INFO,
+        format=log_format)
+    logging.info(variables)
+
+
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--data-dir", type=str, required=True, help="Path to the directory containing recordings to be trained on")
+    parser.add_argument("--data-dir", type=str, required=True,
+                        help="Path to the directory containing recordings to be trained on")
     parser.add_argument("--in-model", required=True, type=str, help="Path to the .model file to be finetuned")
     parser.add_argument("--in-weights", required=True, type=str, help="Path to the .weights file to be finetuned")
 
     args = parser.parse_args()
     behavioural_cloning_train(args.data_dir, args.in_model, args.in_weights)
-

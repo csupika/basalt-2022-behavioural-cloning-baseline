@@ -2,6 +2,12 @@
 scratch/
 train/
 data/
+logs/
+/video/
+/utils/removed_files.txt
+/utils/unreadable_files.txt
+
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

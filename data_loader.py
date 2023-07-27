@@ -8,11 +8,13 @@ from multiprocessing import Process, Queue, Event
 
 import numpy as np
 import cv2
+import logging
 
 from openai_vpt.agent import ACTION_TRANSFORMER_KWARGS, resize_image, AGENT_RESOLUTION
 from openai_vpt.lib.actions import ActionTransformer
 
 QUEUE_TIMEOUT = 10
+VIDEO_PROCESSING_REPORT_RATE = 1
 
 # Set to false if you want to use the original code
 EARLY_STOPPING_CONDITION = False
@@ -168,13 +170,15 @@ def data_loader_worker(tasks_queue, output_queue, quit_workers_event, exception_
         while True:
             if quit_workers_event.is_set():
                 break
-            task = tasks_queue.get(timeout=QUEUE_TIMEOUT)
+            task = tasks_queue.get()
             if task is None:
                 break
             trajectory_id, video_path, json_path = task
 
             # Print the video name before processing
-            print(f"[START] Queue size: {tasks_queue.qsize()}, Processing video: {os.path.basename(video_path)}")
+            tasks_queue_size = tasks_queue.qsize()
+            if tasks_queue_size % VIDEO_PROCESSING_REPORT_RATE == 0:
+                logging.info(f"Qsize:{tasks_queue_size: >5}, Start video: {os.path.basename(video_path)}")
 
             video = cv2.VideoCapture(video_path)
             # Note: In some recordings, the game seems to start
@@ -238,9 +242,10 @@ def data_loader_worker(tasks_queue, output_queue, quit_workers_event, exception_
                     frame = resize_image(frame, AGENT_RESOLUTION)
                     output_queue.put((trajectory_id, frame, action), timeout=QUEUE_TIMEOUT)
                 else:
-                    print(f"Could not read frame from video {video_path}")
+                    logging.info(f"Could not read frame from video {video_path}")
             video.release()
-            print(f"[END] video: {os.path.basename(video_path)}")
+            if tasks_queue_size % VIDEO_PROCESSING_REPORT_RATE == 0:
+                logging.info(f"               End video: {os.path.basename(video_path)}")
             # Signal that this task is done
             # Yes we are using "None"s to tell when worker is done
             # and when individual work-items are done...
@@ -342,7 +347,7 @@ class DataLoader:
         batch_actions = []
         batch_episode_id = []
 
-        # self.check_exceptions()
+        self.check_exceptions()
         for i in range(self.batch_size):
             workitem = self.output_queues[self.n_steps_processed % self.n_workers].get(timeout=QUEUE_TIMEOUT)
             if workitem is None:
@@ -353,17 +358,15 @@ class DataLoader:
                     # of having bad ones in the end where potentially
                     # one worker outputs all samples to the same batch.
                     # Stop processing if all workers have finished
-                    print("\n\n\n\n\n\n\n\n\n#############################################################################################")
+                    logging.info(f"Stop Iteration - Output queue {self.n_steps_processed % self.n_workers} had None")
                     raise StopIteration()
                 else:
-                    print(f"workitem: {len(self.output_queues)}")
                     self.output_queues.pop(self.n_steps_processed % self.n_workers)
                     self.n_workers -= 1
                     # Stops iteration if the remaining number of active queues (n_workers) reached the minimum number
                     # of required queues.
                     if self.n_workers == self.min_required_queues:
-                        print(
-                            "\n\n\n\n\n\n\n\n\nXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
+                        logging.info(f"Stop Iteration - No. of workers {self.n_workers} reached required level {self.min_required_queues}")
                         raise StopIteration()
                     continue
 

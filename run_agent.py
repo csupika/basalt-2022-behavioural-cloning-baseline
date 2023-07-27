@@ -8,19 +8,24 @@ import time
 from openai_vpt.agent import MineRLAgent
 
 
-def log_parameters(recording_name, weight_name, model_name, n_episodes, max_steps, done, env, total_time, timestamp):
-
+def log_parameters(record_name, weights_name, model_name,  max_steps, no_steps, done, env_name, start_time):
+    time_now = datetime.datetime.now()
+    timestamp = time_now.strftime("%Y-%m-%d %H:%M:%S")
+    formatted_start_time = datetime.datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
+    total_time = int(time.time()-start_time)
     with open("video/record_parameters.txt", "a+") as file:
         file.write(f"┌───────────────────────────────────────────────┐\n")
-        file.write(f'│{recording_name : <46} │\n')
+        file.write(f'│{record_name : <46} │\n')
         file.write(f"│                                               │\n")
-        file.write(f'│    Weights Name = {weight_name: <27} │\n')
+        file.write(f'│    Weights Name = {weights_name: <27} │\n')
         file.write(f'│    Model Name   = {model_name: <27} │\n')
         file.write(f'│    Max Steps    = {max_steps: <27} │\n')
+        file.write(f'│    No. Steps    = {no_steps: <27} │\n')
         file.write(f'│    Done         = {done: <27} │\n')
-        file.write(f'│    Env. Name    = {env: <27} │\n')
+        file.write(f'│    Env. Name    = {env_name: <27} │\n')
         file.write(f'│    Runtime      = {total_time: <27} │\n')
-        file.write(f'│    Timestamp    = {timestamp: <27} │\n')
+        file.write(f'│    Start time   = {formatted_start_time: <27} │\n')
+        file.write(f'│    End time     = {timestamp: <27} │\n')
         file.write(f"│                                               │\n")
         file.write("└───────────────────────────────────────────────┘\n\n")
 
@@ -39,10 +44,15 @@ def main(model, weights, env, max_steps=int(1e9), show=False, record=True):
     policy_kwargs = agent_parameters["model"]["args"]["net"]["args"]
     pi_head_kwargs = agent_parameters["model"]["args"]["pi_head_opts"]
     pi_head_kwargs["temperature"] = float(pi_head_kwargs["temperature"])
-    agent = MineRLAgent(env, policy_kwargs=policy_kwargs, pi_head_kwargs=pi_head_kwargs)
+    agent = MineRLAgent(env, device="cuda:2", policy_kwargs=policy_kwargs, pi_head_kwargs=pi_head_kwargs)
     agent.load_weights(weights)
 
+    _ = env.reset()
+    env.seed(1)
+    obs = env.reset()
+    no_steps = 0
     for _ in range(max_steps):
+        no_steps += 1
         action = agent.get_action(obs)
         # ESC is not part of the predictions model.
         # For baselines, we just set it to zero.
@@ -55,10 +65,8 @@ def main(model, weights, env, max_steps=int(1e9), show=False, record=True):
             break
 
     env.close()
-    now = datetime.datetime.now()
-    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
     if record:
-        log_parameters(record_name, weights_name, model_name,  max_steps, done, env_name, int(time.time()-start_time), timestamp)
+        log_parameters(record_name, weights_name, model_name,  max_steps, no_steps, done, env_name, start_time)
     print("Done")
 
 
