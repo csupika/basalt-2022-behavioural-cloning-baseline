@@ -33,9 +33,6 @@ N_WORKERS = 32
 DEVICE = "cuda:3"
 #DEVICE_2 = "cuda:2"
 
-# Has to be a decimal [0; 1]
-MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE = 0.1
-
 LOSS_REPORT_RATE = 100
 
 # Tuned with bit of trial and error
@@ -57,7 +54,6 @@ variables = [
     ("N_WORKERS", N_WORKERS),
     ("MAX_BATCHES", MAX_BATCHES),
     ("BATCH_SIZE", BATCH_SIZE),
-    ("MIN_ACTIVE_QUEUES %", MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE),
     ("LEARNING_RATE", LEARNING_RATE),
     ("WEIGHT_DECAY", WEIGHT_DECAY),
     ("KL_LOSS_WEIGHT", KL_LOSS_WEIGHT),
@@ -152,8 +148,7 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
         dataset_dir=data_dir,
         n_workers=N_WORKERS,
         batch_size=BATCH_SIZE,
-        n_epochs=EPOCHS,
-        min_required_queues=int(N_WORKERS * MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE)
+        n_epochs=EPOCHS
     )
 
     # Print logging details

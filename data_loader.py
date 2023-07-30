@@ -17,23 +17,32 @@ from openai_vpt.lib.actions import ActionTransformer
 QUEUE_TIMEOUT = 10
 VIDEO_PROCESSING_REPORT_RATE = 5
 
-# ToDo: Comments!
 # Flag to print the avg workload of the workers queue size. Used for debugging.
-#     all
-#     avg
+#     all - Print every workers queue size
+#     avg - Print the average size of each workers queue
+#     None - if you don't want to print worker queue size.
 PRINT_WORKERS_Q_SIZE = 'avg'
 WORKER_Q_SIZE_REPORT_RATE = 100
 
-# ToDo: Explain variables
+# Limit to control the workload of the workers.
+# When the average output queue reaches the stopping limit the workers are stopped, this allows the consumer
+# (behavioural cloning: main process) to iterate over the queues and catch up with the work. If a queue reaches the
+# minimum limit the workers are all started. However, if a worker is over the maximum limit then it will stop that
+# worker, and it will wait until it's queue is decreased below the maximum limit.
 AVG_OUTPUT_QUEUE_STOPPING_LIMIT = 250
 OUTPUT_QUEUE_MAX = 300
 OUTPUT_QUEUE_MIN = 100
 TIME_TO_SLEEP_AFTER_NOTIFY_ALL = 5
 
-# Set to false if you want to use the original code
+# Set to true if you want to use the original code. When set to True the code will stop running when the first worker
+# runs out of work to do. When set to False the worker dies when it runs out of work to do, but the rest carries on
+# as long there's work to do and continues until the minimum required workers are alive.
 EARLY_STOPPING_CONDITION = True
+# Has to be a decimal [0; 1]. Used to set the minimum required queues before
+# Used only when the early stopping condition is false
+MIN_REQUIRED_ACTIVE_WORKERS_PERCENTAGE = 0.1
 
-# Set to true in the original code
+# This is set to true in the original code
 RANDOM_SHUFFLE_DEMONSTRATIONS = False
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), "cursors", "mouse_cursor_white_16x16.png")
@@ -314,7 +323,7 @@ class DataLoader:
       this code will load it up as a separate item).
     """
 
-    def __init__(self, dataset_dir, n_workers=8, batch_size=8, n_epochs=1, max_queue_size=0, min_required_queues=0):
+    def __init__(self, dataset_dir, n_workers=8, batch_size=8, n_epochs=1, max_queue_size=0):
         assert n_workers >= batch_size, "Number of workers must be equal or greater than batch size"
         self.dataset_dir = dataset_dir
         self.n_workers = n_workers
@@ -328,13 +337,18 @@ class DataLoader:
         # This parameter controls the minimum number of required active worker queues. If the
         # number of active worker queues (n_workers) reaches this minimum value, the DataLoader stops iteration,
         # ensuring a sufficient level of diversity in the generated batches. Has to be at least 0.
-        self.min_required_queues = min_required_queues
+        self.min_required_queues = int(n_workers * MIN_REQUIRED_ACTIVE_WORKERS_PERCENTAGE)
 
         # Exception queue used to catch the exception raised in the data loader and to pass it to the main process
         self.exception_queue = Queue()
 
-        # ToDo: Add explanation here
+        # This condition variable is used to synchronize threads. If the queue is full or
+        # the output queue size exceeds a maximum value, the condition variable makes
+        # the worker threads wait.
         self.condition = Condition()
+
+        # This event is set when the output queue is full. It is used to notify workers
+        # that they should stop processing new tasks until there is space in the queue.
         self.queue_is_full_event = Event()
 
         self.i = 0
@@ -408,7 +422,7 @@ class DataLoader:
                     # of having bad ones in the end where potentially
                     # one worker outputs all samples to the same batch.
                     # Stop processing if all workers have finished
-                    logging.info(f"Stop Iteration - Output queue {self.n_steps_processed % self.n_workers} had None")
+                    logging.info(f"Stop Iteration - Output queue {self.n_steps_processed % self.n_workers}. had None")
                     raise StopIteration()
                 else:
                     self.output_queues.pop(self.n_steps_processed % self.n_workers)
@@ -417,7 +431,7 @@ class DataLoader:
                     # of required queues.
                     if self.n_workers == self.min_required_queues:
                         logging.info(
-                            f"Stop Iteration - No. of workers {self.n_workers} reached required level {self.min_required_queues}")
+                            f"Stop Iteration - No. of workers {self.n_workers} reached required number to stop: {self.min_required_queues}")
                         raise StopIteration()
                     continue
 
@@ -440,6 +454,20 @@ class DataLoader:
             raise self.exception_queue.get(timeout=QUEUE_TIMEOUT)
 
     def worker_queue_size_control(self):
+        """
+        This method calculates the average size of all output queues. If the average size
+        exceeds the limit and none of the output queues are below a
+        minimum size threshold, it sets an event that indicates the output queues
+        are full. This will make the workers pause their work.
+
+        If the average size is below the limit or if any of the queues are below
+        the minimum size threshold, it clears the event and notifies all waiting
+        workers to resume their work. (note: However, if any queue is over the maximum
+        limit the queue will be stopped and won't carry on until it's over the limit.
+        This MAX part is controlled from the process and not from here.)
+        If any queue is below the minimum threshold, the method also sleeps for a
+        few seconds to allow the consumer to catch up.
+        """
         avg = 0
         counter = 0
         qsize_below_min_threshold = False
