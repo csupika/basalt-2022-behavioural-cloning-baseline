@@ -24,19 +24,19 @@ from random_word import RandomWords
 
 EPOCHS = 1
 # Needs to be <= number of videos
-BATCH_SIZE = 16
+BATCH_SIZE = 28
 # Ideally more than batch size to create
 # variation in datasets (otherwise, you will
 # get a bunch of consecutive samples)
 # Decrease this (and batch_size) if you run out of memory
-N_WORKERS = 30
+N_WORKERS = 32
 DEVICE = "cuda:3"
 #DEVICE_2 = "cuda:2"
 
 # Has to be a decimal [0; 1]
 MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE = 0.1
 
-LOSS_REPORT_RATE = 5
+LOSS_REPORT_RATE = 100
 
 # Tuned with bit of trial and error
 LEARNING_RATE = 0.000181
@@ -48,18 +48,20 @@ KL_LOSS_WEIGHT = 1.0
 MAX_GRAD_NORM = 5.0
 
 # 10 000 was enough for 69 videos,  1699.66 with 8 workers
-MAX_BATCHES = int(1e9)
+MAX_BATCHES = int(1e11)
+
+HEAD_START_TIME_FOR_PROCESSES = 10
 
 variables = [
     ("EPOCHS", EPOCHS),
+    ("N_WORKERS", N_WORKERS),
+    ("MAX_BATCHES", MAX_BATCHES),
     ("BATCH_SIZE", BATCH_SIZE),
     ("MIN_ACTIVE_QUEUES %", MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE),
     ("LEARNING_RATE", LEARNING_RATE),
     ("WEIGHT_DECAY", WEIGHT_DECAY),
     ("KL_LOSS_WEIGHT", KL_LOSS_WEIGHT),
     ("MAX_GRAD_NORM", MAX_GRAD_NORM),
-    ("MAX_BATCHES", MAX_BATCHES),
-    ("N_WORKERS", N_WORKERS),
     ("DEVICES", DEVICE),
 ]
 
@@ -101,20 +103,16 @@ def load_model_parameters(path_to_model_file):
 
 def behavioural_cloning_train(data_dir, in_model, in_weights):
     time_now = datetime.datetime.now()
-    start_timestamp = time_now.strftime("%Y-%m-%d %H:%M:%S")
+    start_timestamp = time_now.strftime('%Y%m%d_%H%M%S')
     r = RandomWords()
-    training_name = r.get_random_word() + "_" + r.get_random_word()
+    training_name = start_timestamp + "_" + r.get_random_word() + "_" + r.get_random_word()
     out_weights = "train/" + training_name + ".weights"
     agent_policy_kwargs, agent_pi_head_kwargs = load_model_parameters(in_model)
 
     # Logging
     logs_folder = "logs/train"  # Specify the folder for logs
     os.makedirs(logs_folder, exist_ok=True)  # Create the logs folder if it doesn't exist
-    setup_logging(logs_folder, time_now, training_name)
-
-    # Print logging details
-    logging.info(f"Training name: {training_name}")
-    logging.info(f"Start time: {start_timestamp}")
+    setup_logging(logs_folder, training_name)
 
     # To create model with the right environment.
     # All basalt environments have the same settings, so any of them works here
@@ -158,6 +156,11 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
         min_required_queues=int(N_WORKERS * MIN_REQUIRED_ACTIVE_QUEUES_PERCENTAGE)
     )
 
+    # Print logging details
+    logging.info(f"Training name: {training_name}")
+    logging.info(f"Start time: {time_now.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    time.sleep(HEAD_START_TIME_FOR_PROCESSES)
     start_time = time.time()
 
     # Keep track of the hidden state per episode/trajectory.
@@ -249,14 +252,14 @@ def behavioural_cloning_train(data_dir, in_model, in_weights):
         logging.info(">>>>DONE<<<<")
 
 
-def setup_logging(logs_folder, time_now, training_name):
+def setup_logging(logs_folder, training_name):
     log_format = "%(asctime)s [%(levelname)s] %(message)s"
     logging.basicConfig(
-        handlers=[logging.FileHandler(f"{logs_folder}/log_{time_now.strftime('%Y%m%d_%H%M%S')}_{training_name}.txt"),
+        handlers=[logging.FileHandler(f"{logs_folder}/log_{training_name}.txt"),
                   logging.StreamHandler()],
         level=logging.INFO,
         format=log_format)
-    logging.info(variables)
+    logging.info(f"Behavioural Cloning: {variables}")
 
 
 

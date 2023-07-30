@@ -4,7 +4,8 @@ import json
 import glob
 import os
 import random
-from multiprocessing import Process, Queue, Event
+import time
+from multiprocessing import Process, Queue, Event, Condition
 
 import numpy as np
 import cv2
@@ -14,38 +15,66 @@ from openai_vpt.agent import ACTION_TRANSFORMER_KWARGS, resize_image, AGENT_RESO
 from openai_vpt.lib.actions import ActionTransformer
 
 QUEUE_TIMEOUT = 10
-VIDEO_PROCESSING_REPORT_RATE = 1
+VIDEO_PROCESSING_REPORT_RATE = 5
+
+# ToDo: Comments!
+# Flag to print the avg workload of the workers queue size. Used for debugging.
+#     all
+#     avg
+PRINT_WORKERS_Q_SIZE = 'avg'
+WORKER_Q_SIZE_REPORT_RATE = 100
+
+# ToDo: Explain variables
+AVG_OUTPUT_QUEUE_STOPPING_LIMIT = 250
+OUTPUT_QUEUE_MAX = 300
+OUTPUT_QUEUE_MIN = 100
+TIME_TO_SLEEP_AFTER_NOTIFY_ALL = 5
 
 # Set to false if you want to use the original code
-EARLY_STOPPING_CONDITION = False
+EARLY_STOPPING_CONDITION = True
 
 # Set to true in the original code
 RANDOM_SHUFFLE_DEMONSTRATIONS = False
 
 CURSOR_FILE = os.path.join(os.path.dirname(__file__), "cursors", "mouse_cursor_white_16x16.png")
 
+
+# List of variables:
+variables = [
+    ("AVG_OUTPUT_QUEUE_STOPPING_LIMIT", AVG_OUTPUT_QUEUE_STOPPING_LIMIT),
+    ("OUTPUT_QUEUE_MAX", OUTPUT_QUEUE_MAX),
+    ("OUTPUT_QUEUE_MIN", OUTPUT_QUEUE_MIN),
+    ("VIDEO_PROCESSING_REPORT_RATE", VIDEO_PROCESSING_REPORT_RATE),
+    ("WORKER_Q_SIZE_REPORT_RATE", WORKER_Q_SIZE_REPORT_RATE),
+    ("PRINT_WORKERS_Q_SIZE", PRINT_WORKERS_Q_SIZE),
+    ("QUEUE_TIMEOUT", QUEUE_TIMEOUT),
+    ("EARLY_STOPPING_CONDITION", EARLY_STOPPING_CONDITION),
+    ("TIME_TO_SLEEP_AFTER_NOTIFY_ALL", TIME_TO_SLEEP_AFTER_NOTIFY_ALL),
+    ("RANDOM_SHUFFLE_DEMONSTRATIONS", RANDOM_SHUFFLE_DEMONSTRATIONS),
+]
+
 # Mapping from JSON keyboard buttons to MineRL actions
 KEYBOARD_BUTTON_MAPPING = {
-    "key.keyboard.escape" :"ESC",
-    "key.keyboard.s" :"back",
-    "key.keyboard.q" :"drop",
-    "key.keyboard.w" :"forward",
-    "key.keyboard.1" :"hotbar.1",
-    "key.keyboard.2" :"hotbar.2",
-    "key.keyboard.3" :"hotbar.3",
-    "key.keyboard.4" :"hotbar.4",
-    "key.keyboard.5" :"hotbar.5",
-    "key.keyboard.6" :"hotbar.6",
-    "key.keyboard.7" :"hotbar.7",
-    "key.keyboard.8" :"hotbar.8",
-    "key.keyboard.9" :"hotbar.9",
-    "key.keyboard.e" :"inventory",
-    "key.keyboard.space" :"jump",
-    "key.keyboard.a" :"left",
-    "key.keyboard.d" :"right",
-    "key.keyboard.left.shift" :"sneak",
-    "key.keyboard.left.control" :"sprint",
-    "key.keyboard.f" :"swapHands",
+    "key.keyboard.escape": "ESC",
+    "key.keyboard.s": "back",
+    "key.keyboard.q": "drop",
+    "key.keyboard.w": "forward",
+    "key.keyboard.1": "hotbar.1",
+    "key.keyboard.2": "hotbar.2",
+    "key.keyboard.3": "hotbar.3",
+    "key.keyboard.4": "hotbar.4",
+    "key.keyboard.5": "hotbar.5",
+    "key.keyboard.6": "hotbar.6",
+    "key.keyboard.7": "hotbar.7",
+    "key.keyboard.8": "hotbar.8",
+    "key.keyboard.9": "hotbar.9",
+    "key.keyboard.e": "inventory",
+    "key.keyboard.space": "jump",
+    "key.keyboard.a": "left",
+    "key.keyboard.d": "right",
+    "key.keyboard.left.shift": "sneak",
+    "key.keyboard.left.control": "sprint",
+    "key.keyboard.f": "swapHands",
 }
 
 # Template action
@@ -156,7 +185,7 @@ def composite_images_with_alpha(image1, image2, alpha, x, y):
         np.uint8)
 
 
-def data_loader_worker(tasks_queue, output_queue, quit_workers_event, exception_queue):
+def data_loader_worker(tasks_queue, output_queue, quit_workers_event, exception_queue, queue_is_full_event, condition):
     """
     Worker for the data loader.
     """
@@ -170,6 +199,13 @@ def data_loader_worker(tasks_queue, output_queue, quit_workers_event, exception_
         while True:
             if quit_workers_event.is_set():
                 break
+
+            output_queue_size = output_queue.qsize()
+            if queue_is_full_event.is_set() or output_queue_size > OUTPUT_QUEUE_MAX:
+                with condition:
+                    condition.wait()
+                    continue
+
             task = tasks_queue.get()
             if task is None:
                 break
@@ -261,6 +297,7 @@ def data_loader_worker(tasks_queue, output_queue, quit_workers_event, exception_
         # Terminate all worker processes immediately
         quit_workers_event.set()
 
+
 class DataLoader:
     """
     Generator class for loading batches from a dataset
@@ -296,6 +333,14 @@ class DataLoader:
         # Exception queue used to catch the exception raised in the data loader and to pass it to the main process
         self.exception_queue = Queue()
 
+        # ToDo: Add explanation here
+        self.condition = Condition()
+        self.queue_is_full_event = Event()
+
+        self.i = 0
+
+        logging.info(f"Data Loader: {variables}")
+
         # Create tuples of (video_path, json_path) for each unique_id
         demonstration_tuples = []
         for unique_id in unique_ids:
@@ -330,7 +375,9 @@ class DataLoader:
                     self.task_queue,
                     output_queue,
                     self.quit_workers_event,
-                    self.exception_queue
+                    self.exception_queue,
+                    self.queue_is_full_event,
+                    self.condition
                 ),
                 daemon=True
             )
@@ -343,11 +390,14 @@ class DataLoader:
         return self
 
     def __next__(self):
+        self.check_exceptions()
+        self.i += 1
         batch_frames = []
         batch_actions = []
         batch_episode_id = []
 
-        self.check_exceptions()
+        self.worker_queue_size_control()
+
         for i in range(self.batch_size):
             workitem = self.output_queues[self.n_steps_processed % self.n_workers].get(timeout=QUEUE_TIMEOUT)
             if workitem is None:
@@ -366,7 +416,8 @@ class DataLoader:
                     # Stops iteration if the remaining number of active queues (n_workers) reached the minimum number
                     # of required queues.
                     if self.n_workers == self.min_required_queues:
-                        logging.info(f"Stop Iteration - No. of workers {self.n_workers} reached required level {self.min_required_queues}")
+                        logging.info(
+                            f"Stop Iteration - No. of workers {self.n_workers} reached required level {self.min_required_queues}")
                         raise StopIteration()
                     continue
 
@@ -387,3 +438,27 @@ class DataLoader:
         # Check if any exceptions were raised by workers
         if self.exception_queue.qsize() > 0:
             raise self.exception_queue.get(timeout=QUEUE_TIMEOUT)
+
+    def worker_queue_size_control(self):
+        avg = 0
+        counter = 0
+        qsize_below_min_threshold = False
+        for q in self.output_queues:
+            qsize = q.qsize()
+            if not qsize_below_min_threshold and qsize < OUTPUT_QUEUE_MIN:
+                qsize_below_min_threshold = True
+            avg += qsize
+            counter += 1
+            if PRINT_WORKERS_Q_SIZE == 'all' and self.i % WORKER_Q_SIZE_REPORT_RATE == 0:
+                logging.info(f"Worker {counter :>2}:  {q.qsize()}")
+        avg = avg / self.n_workers
+        if PRINT_WORKERS_Q_SIZE == 'avg' and self.i % WORKER_Q_SIZE_REPORT_RATE == 0:
+            logging.info(f"Worker Q Avg. :{avg}")
+        if avg > AVG_OUTPUT_QUEUE_STOPPING_LIMIT and not qsize_below_min_threshold:
+            self.queue_is_full_event.set()
+        else:
+            with self.condition:
+                self.condition.notify_all()
+            self.queue_is_full_event.clear()
+            if qsize_below_min_threshold:
+                time.sleep(TIME_TO_SLEEP_AFTER_NOTIFY_ALL)
