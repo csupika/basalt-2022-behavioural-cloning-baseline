@@ -3,7 +3,7 @@
 # Changing this file will probably fail your submissions.
 
 import train
-import eval_FindCave
+import test_FindCave
 
 import os
 
@@ -12,5 +12,5 @@ EVALUATION_STAGE = os.getenv('EVALUATION_STAGE', 'testing')
 
 # Testing Phase
 if EVALUATION_STAGE in ['all', 'testing']:
-    eval_FindCave.main()
+    test_FindCave.main()
 

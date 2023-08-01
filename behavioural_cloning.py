@@ -31,7 +31,6 @@ BATCH_SIZE = 28
 # Decrease this (and batch_size) if you run out of memory
 N_WORKERS = 32
 DEVICE = "cuda:3"
-#DEVICE_2 = "cuda:2"
 
 LOSS_REPORT_RATE = 100
 
@@ -44,7 +43,6 @@ WEIGHT_DECAY = 0.0
 KL_LOSS_WEIGHT = 1.0
 MAX_GRAD_NORM = 5.0
 
-# 10 000 was enough for 69 videos,  1699.66 with 8 workers
 MAX_BATCHES = int(1e11)
 
 HEAD_START_TIME_FOR_PROCESSES = 10

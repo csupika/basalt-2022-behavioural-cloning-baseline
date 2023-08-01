@@ -32,15 +32,15 @@ WORKER_Q_SIZE_REPORT_RATE = 100
 AVG_OUTPUT_QUEUE_STOPPING_LIMIT = 250
 OUTPUT_QUEUE_MAX = 300
 OUTPUT_QUEUE_MIN = 100
-TIME_TO_SLEEP_AFTER_NOTIFY_ALL = 5
+TIME_TO_SLEEP_AFTER_NOTIFY_ALL = 2
 
 # Set to true if you want to use the original code. When set to True the code will stop running when the first worker
 # runs out of work to do. When set to False the worker dies when it runs out of work to do, but the rest carries on
 # as long there's work to do and continues until the minimum required workers are alive.
-EARLY_STOPPING_CONDITION = True
+EARLY_STOPPING_CONDITION = False
 # Has to be a decimal [0; 1]. Used to set the minimum required queues before
 # Used only when the early stopping condition is false
-MIN_REQUIRED_ACTIVE_WORKERS_PERCENTAGE = 0.1
+MIN_REQUIRED_ACTIVE_WORKERS_PERCENTAGE = 0.5
 
 # This is set to true in the original code
 RANDOM_SHUFFLE_DEMONSTRATIONS = False

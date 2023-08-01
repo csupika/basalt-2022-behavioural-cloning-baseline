@@ -12,6 +12,7 @@ class Recorder(gym.Wrapper):
         self.auto_release = auto_release
         self.active = True
         self.name = name
+        self.video_counter = 0
 
         if not os.path.exists(self.directory):
             os.mkdir(self.directory)
@@ -37,7 +38,8 @@ class Recorder(gym.Wrapper):
         self.active = True
 
     def _start(self):
-        self.path = f'{self.directory}/{self.name}.mp4'
+        self.path = f'{self.directory}/{self.name}_{self.video_counter:02}.mp4'
+        self.video_counter += 1
         fourcc = cv2.VideoWriter_fourcc(*'MP4V')
         self._writer = cv2.VideoWriter(self.path, fourcc, self.fps, self.size)
 

@@ -4,8 +4,6 @@ from behavioural_cloning import behavioural_cloning_train
 def main():
     print("===Training FindCave model===")
     data_dir = "/mnt/data/plc2000/2500_MineRLBasaltFindCave-v0"
-    # data_dir = "/mnt/data/plc2000/MineRLBasaltFindCave-v0"
-    # data_dir = "data/10_data/"
     print(f"Data: {data_dir}")
     behavioural_cloning_train(
         data_dir=data_dir,
