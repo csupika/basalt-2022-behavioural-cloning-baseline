@@ -6,6 +6,9 @@ logs/
 /video/
 /utils/removed_files.txt
 /utils/unreadable_files.txt
+/yolov8/runs/
+/yolov8/*.pt
+/results/
 
 
 
