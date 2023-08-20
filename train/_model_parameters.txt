@@ -1,0 +1,68 @@
+┌───────────────────────────────────────────────┐
+│20230728_050222_irreplaceability_saturnineness │
+│                                               │
+│    TRAINING TIME = 76731.67857384682          │
+│    EPOCHS = 1                                 │
+│    N_WORKERS = 32                             │
+│    MAX_BATCHES = 100000000000                 │
+│    BATCH_SIZE = 28                            │
+│    MIN_ACTIVE_QUEUES % = 0.1  EARLY_STOPPING_CONDITION = False
+│    LEARNING_RATE = 0.000181                   │
+│    WEIGHT_DECAY = 0.0                         │
+│    KL_LOSS_WEIGHT = 1.0                       │
+│    MAX_GRAD_NORM = 5.0                        │
+│    DEVICES = cuda:3                           │
+│                                               │
+│    TIMESTAMP = 2023-07-29 02:21:30            │
+│    BATCHES  = 101587                          │
+│    START TIME = 20230728_050222               │
+│    DATA DIR = /mnt/data/plc2000/2500_MineRLBasaltFindCave-v0 │
+│    SAMPLE SIZE = 2457                         │
+│    REMAINING REC = 1                          │
+└───────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────┐
+│20230729_024840_statfarad_saruk                │
+│                                               │
+│    TRAINING TIME = 72207.36508584023          │
+│    EPOCHS = 1                                 │
+│    N_WORKERS = 32                             │
+│    MAX_BATCHES = 100000000000                 │
+│    BATCH_SIZE = 28                            │
+│    MIN_ACTIVE_QUEUES = Non EARLY_STOPPING_CONDITION = True
+│    LEARNING_RATE = 0.000181                   │
+│    WEIGHT_DECAY = 0.0                         │
+│    KL_LOSS_WEIGHT = 1.0                       │
+│    MAX_GRAD_NORM = 5.0                        │
+│    DEVICES = cuda:3                           │
+│                                               │
+│    TIMESTAMP = 2023-07-29 22:52:23            │
+│    BATCHES  = 100712                          │
+│    START TIME = 20230729_024840               │
+│    DATA DIR = /mnt/data/plc2000/2500_MineRLBasaltFindCave-v0 │
+│    SAMPLE SIZE = 2457                         │
+│    REMAINING REC = 24                         │
+└───────────────────────────────────────────────┘
+┌───────────────────────────────────────────────┐
+│20230731_181542_upwrench_widdy                 │
+│                                               │
+│    TRAINING TIME = 74270.15316605568          │
+│    EPOCHS = 1                                 │
+│    N_WORKERS = 32                             │
+│    MAX_BATCHES = 100000000000                 │
+│    BATCH_SIZE = 28                            │
+│    MIN_ACTIVE_QUEUES = 0.5  EARLY_STOPPING_CONDITION = False
+│    LEARNING_RATE = 0.000181                   │
+│    WEIGHT_DECAY = 0.0                         │
+│    KL_LOSS_WEIGHT = 1.0                       │
+│    MAX_GRAD_NORM = 5.0                        │
+│    DEVICES = cuda:3                           │
+│                                               │
+│    TIMESTAMP = 2023-08-01 14:53:49            │
+│    BATCHES  = 101286                          │
+│    START TIME = 20230731_181542               │
+│    DATA DIR = /mnt/data/plc2000/2500_MineRLBasaltFindCave-v0 │
+│    SAMPLE SIZE = 2457                         │
+│    REMAINING REC = 16                         │
+└───────────────────────────────────────────────┘
+

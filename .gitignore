@@ -1,6 +1,4 @@
 # Data and dev folders
-scratch/
-train/
 data/
 logs/
 /video/
@@ -8,7 +6,6 @@ logs/
 /utils/unreadable_files.txt
 /yolov8/runs/
 /yolov8/*.pt
-/results/
 
 
 

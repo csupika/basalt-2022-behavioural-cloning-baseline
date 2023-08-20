@@ -59,7 +59,7 @@ def log_parameters(record_name, weights_name, vpt_model_name, yolo_model, max_st
     total_time = int(time.time()-start_time)
 
     # Convert the completed_runs list to a formatted string
-    completed_runs_str = " ".join([f"[{episode}, {steps}, {done}]" for episode, steps, done in completed_runs])
+    completed_runs_str = " ".join([f"[{episode}, {steps}, {episode_ended_with}]" for episode, steps, episode_ended_with in completed_runs])
     with open("video/record_parameters.txt", "a+") as file:
         file.write(f"┌───────────────────────────────────────────────┐\n")
         file.write(f'│{record_name : <46} │\n')
@@ -72,7 +72,7 @@ def log_parameters(record_name, weights_name, vpt_model_name, yolo_model, max_st
         file.write(f'│    No. Episodes = {n_episodes: <27} │\n')
         file.write(f'│    Confidence   = {CONF: <27} │\n')
         file.write(f'│    Seed         = {SEED: <27} │\n')
-        file.write(f'│    Completed Runs ep. : steps = {completed_runs_str: <10} │\n')
+        file.write(f'│    [Ep, steps, ends with]  = {completed_runs_str: <10} │\n')
         file.write(f'│    Device       = {device: <27} │\n')
         file.write(f'│    Env. Name    = {env_name: <27} │\n')
         file.write(f'│    Runtime      = {total_time: <27} │\n')
@@ -83,7 +83,7 @@ def log_parameters(record_name, weights_name, vpt_model_name, yolo_model, max_st
 
 
 def predict_on_observation(yolo_model, img):
-    # Run the model prediction on the temporary file
+    # Run the model prediction on the image
     results = yolo_model(img, verbose=False)
 
     # Get probabilities [0 - Unlabeled, 1 - inside cave]
@@ -125,7 +125,7 @@ def main(vpt_model, yolo_model, weights, env, n_episodes=3, max_steps=int(1e9), 
             env.seed(SEED)
             obs = env.reset()
             z = 0
-            done = None
+            episode_ended_with = "max steps"
             for z in range(max_steps):
                 no_steps += 1
                 action = agent.get_action(obs)
@@ -137,8 +137,12 @@ def main(vpt_model, yolo_model, weights, env, n_episodes=3, max_steps=int(1e9), 
                 if show:
                     env.render()
                 if done or predict_on_observation(yolo_model, env.render(mode='rgb_array')):
+                    # If done is true that means the agent died. If done is not true then the agent is inside a cave.
+                    # Else the episode ended with will stay on default 'max steps' reached
+                    episode_ended_with = "death" if done else "cave"
                     break
-            completed_runs.append([i, z, done])
+
+            completed_runs.append([i+1, z, episode_ended_with])
             save_inside_cave_probabilities(record_name)
 
     finally:

@@ -4,7 +4,6 @@ import os
 import glob
 import cv2
 import json
-import threading
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 
@@ -78,7 +77,6 @@ if __name__ == "__main__":
     # args = parser.parse_args()
 
     Args = namedtuple('Args', ['json_file', 'num_demos', 'output_dir'])
-    # args = Args(json_file="find-cave-Jul-28.json", num_demos=10, output_dir="../data/10_data/")
     args = Args(json_file="find-cave-Jul-28.json", num_demos=1500, output_dir="/mnt/data/plc2000/1500_MineRLBasaltFindCave-v0/")
     main(args)
     print("#########################< Done >#########################")

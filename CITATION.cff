@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+preferred-citation:
+  type: software
+  message: If you use this software, please cite it as below.
+  authors:
+  - family-names: Cseh
+    given-names: Peter L.
+  title: "MineRL Agent"
+  year: 2023
+  date-released: 2023-8-13
+  license: MIT
+  url: "https://github.com/csupika/basalt-2022-behavioural-cloning-baseline/"
