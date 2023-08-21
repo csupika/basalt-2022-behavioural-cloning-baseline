@@ -1,0 +1,40 @@
+┌───────────────────────────────────────────────┐
+│1692150386_20230728_050222_irreplaceability_saturnineness │
+│                                               │
+│    Weights Name = 20230728_050222_irreplaceability_saturnineness.weights │
+│    VPT Model    = foundation-model-1x.model   │
+│    yolo Model   = train21/best.pt             │
+│    Max Steps    = 3600                        │
+│    No. Steps    = 76715                       │
+│    No. Episodes = 50                          │
+│    Confidence   = 0.95                        │
+│    Seed         = 42                          │
+│    [Ep, steps, ends with]  = [1, 3599, x] [2, 2928, FP] [3, 3599, x] [4, 406, TP] [5, 3599, X] [6, 3599, X] [7, 131, TP] [8, 3599, X] [9, 1599, FP] [10, 3599, X] [11, 3599, X] [12, 1908, FP] [13, 1860, TP] [14, 3599, X] [15, 224, TP] [16, 3599, X] [17, 319, TP] [18, 1443, TP] [19, 3599, X] [20, 3599, X] [21, 1821, FP] [22, 3599, X] [23, 3066, FP] [24, 2717, FP] [25, 3599, X] [26, 3599, X] [27, 2141, FP] [28, 3599, X] [29, 751, TP] [30, 1386, FP] │
+│    Device       = cuda:1                      │
+│    Env. Name    = MineRLBasaltFindCave-v0     │
+│    Runtime      = 13215                       │
+│    Start time   = 2023-08-16 02:46:26         │
+│    End time     = 2023-08-16 06:26:41         │
+│                                               │
+└───────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────┐
+│1692179795_20230728_050222_irreplaceability_saturnineness │
+│                                               │
+│    Weights Name = 20230728_050222_irreplaceability_saturnineness.weights │
+│    VPT Model    = foundation-model-1x.model   │
+│    yolo Model   = train21/best.pt             │
+│    Max Steps    = 3600                        │
+│    No. Steps    = 56301                       │
+│    No. Episodes = 20                          │
+│    Confidence   = 0.95                        │
+│    Seed         = 42                          │
+│    [Ep, steps, ends with]  = [1, 3160, FP] [2, 621, TP] [3, 2738, TP] [4, 3599, X] [5, 3599, X] [6, 3599, X] [7, 2896, FP] [8, 3599, X] [9, 3599, X] [10, 1517, TP] [11, 3599, X] [12, 1769, FP] [13, 2668, TP] [14, 3599, X] [15, 2211, TP] [16, 3599, X] [17, 3426, TP] [18, 385, FP] [19, 3599, X] [20, 2499, TP] │
+│    Device       = cuda:1                      │
+│    Env. Name    = MineRLBasaltFindCave-v0     │
+│    Runtime      = 8059                        │
+│    Start time   = 2023-08-16 10:56:35         │
+│    End time     = 2023-08-16 13:10:54         │
+│                                               │
+└───────────────────────────────────────────────┘
+

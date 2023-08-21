@@ -1,0 +1,40 @@
+
+┌───────────────────────────────────────────────┐
+│1692150298_foundation-model-1x                 │
+│                                               │
+│    Weights Name = foundation-model-1x.weights │
+│    VPT Model    = foundation-model-1x.model   │
+│    yolo Model   = train21/best.pt             │
+│    Max Steps    = 3600                        │
+│    No. Steps    = 77710                       │
+│    No. Episodes = 50                          │
+│    Confidence   = 0.95                        │
+│    Seed         = 42                          │
+│    [Ep, steps, ends with]  = [1, 731, TP] [2, 3599, FP] [3, 3548, TP] [4, 2881, FP] [5, 3599, x] [6, 3599, x] [7, 3599, x] [8, 2708, TP] [9, 3162, X] [10, 1144, TP] [11, 1962, FP] [12, 133, TP] [13, 955, TP] [14, 447, TP] [15, 3599, x] [16, 3599, x] [17, 2624, TP] [18, 3414, TP] [19, 3599, x] [20, 3427, TP] [21, 3599, X] [22, 2595, X] [23, 3285, FP] [24, 3599, X] [25, 280, TP] [26, 793, TP] [27, 3599, X] [28, 3599, X] [29, 3599, X] [30, 100, TP] [31, 302, TP] │
+│    Device       = cuda:0                      │
+│    Env. Name    = MineRLBasaltFindCave-v0     │
+│    Runtime      = 12527                       │
+│    Start time   = 2023-08-16 02:44:58         │
+│    End time     = 2023-08-16 06:13:45         │
+│                                               │
+└───────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────┐
+│1692179754_foundation-model-1x                 │
+│                                               │
+│    Weights Name = foundation-model-1x.weights │
+│    VPT Model    = foundation-model-1x.model   │
+│    yolo Model   = train21/best.pt             │
+│    Max Steps    = 3600                        │
+│    No. Steps    = 32574                       │
+│    No. Episodes = 19                          │
+│    Confidence   = 0.95                        │
+│    Seed         = 42                          │
+│    [Ep, steps, ends with]  = [1, 2928, FP] [2, 3027, FP] [3, 2090, TP] [4, 928, FP] [5, 3599, X] [6, 1565, TP] [7, 309, TP] [8, 97, TP] [9, 1518, TP] [10, 880, X] [11, 1505, FP] [12, 3531, TP] [13, 654, FP] [14, 1267, TP] [15, 931, TP] [16, 132, TP] [17, 396, TP] [18, 3599, X] [19, 3599, X] │
+│    Device       = cuda:0                      │
+│    Env. Name    = MineRLBasaltFindCave-v0     │
+│    Runtime      = 4698                        │
+│    Start time   = 2023-08-16 10:55:54         │
+│    End time     = 2023-08-16 12:14:12         │
+│                                               │
+└───────────────────────────────────────────────┘
