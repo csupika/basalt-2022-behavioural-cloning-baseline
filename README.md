@@ -12,6 +12,36 @@ Most of the changes was applied in:
 - [data_loader.py](https://github.com/minerllabs/basalt-2022-behavioural-cloning-baseline/compare/main...csupika:basalt-2022-behavioural-cloning-baseline:main#diff-e42ca25bb5510426ff2e770dc5dec52a2e8bce0c9a6ac8a51ec50277e98b7ddf)
 - [behavoral_cloning.py](https://github.com/minerllabs/basalt-2022-behavioural-cloning-baseline/compare/main...csupika:basalt-2022-behavioural-cloning-baseline:main#diff-45a5f8c20489ae9d62a9df8d836d0f96979c582de6e40488690cbaaa0a0d81bd)
 
+
+## Trained Models
+The models described in the research
+
+### YOLO
+Trained on Dataset:
+- [v1](https://universe.roboflow.com/minerl-findcave-u5lrz/minerl-findcave-inside-cave-v1)
+   - AMP Enabled: `yolov8/runs/classify/train18/weights/best.pt`
+   - AMP Disabled: `yolov8/runs/classify/train19/weights/best.pt`
+
+- [v2](https://universe.roboflow.com/minerl-findcave-u5lrz/minerl-findcave-inside-cave-v2-no-water-inside-cave)
+   - AMP Enabled:`yolov8/runs/classify/train20/weights/best.pt`
+   - AMP Disabled: `yolov8/runs/classify/train21/weights/best.pt`
+  
+### VPT
+- `20230728_050222_irreplaceability_saturninenes`: MIN_ACTIVE_QUEUES % = 0.1  EARLY_STOPPING_CONDITION = False
+- `20230729_024840_statfarad_saruk`: MIN_ACTIVE_QUEUES = Non EARLY_STOPPING_CONDITION = True
+- `20230731_181542_upwrench_widdy`: MIN_ACTIVE_QUEUES = 0.5  EARLY_STOPPING_CONDITION = False
+- The list of FindCave-v0 data used for training the VPT models can be found in: `train/training_data_file_list.txt`
+
+## Get Fine-Tuned VPT Models From Git LFS 
+The VPT models trained by me are on Git LFS
+To download please follow these steps:
+1) `git lfs install`
+2) `git lfs fetch`
+3) Checkout or Pull: Depending on how you cloned the repository, you might need to perform a checkout or pull operation to get the VPT files trained by me.
+   - `git checkout main`
+   - `git pull origin main`
+
+
 ## Run MineRL Agent
 ### I. Train VPT Model
 1) Download dataset with `utils/download_dataset.py`
@@ -41,11 +71,3 @@ Most of the changes was applied in:
 - Headed: Set the show to `True` on line 96 in `run_agent.py` and then run.
 - The recordings of the run(s) will be saved to `video/`
 
-# Get Fine-Tuned VPT Models From Git LFS 
-The VPT models trained by me are on Git LFS
-To download please follow these steps:
-1) `git lfs install`
-2) `git lfs fetch`
-3) Checkout or Pull: Depending on how you cloned the repository, you might need to perform a checkout or pull operation to get the VPT files trained by me.
-   - `git checkout main`
-   - `git pull origin main`
