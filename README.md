@@ -1,84 +1,51 @@
-# NeurIPS 2022: MineRL BASALT Behavioural Cloning Baseline
-
-[![Discord](https://img.shields.io/discord/565639094860775436.svg)](https://discord.gg/BT9uegr)
-
-This repository contains a behavioural cloning baseline solution for the MineRL BASALT 2022 Competition ("basalt" track)! This solution fine-tunes the "width-x1" models of OpenAI VPT for more sample-efficient training.
-
-You can find the "intro" track baseline solution [here](https://github.com/minerllabs/basalt-2022-intro-track-baseline).
-
-MineRL BASALT is a competition on solving human-judged tasks. The tasks in this competition do not have a pre-defined reward function: the goal is to produce trajectories that are judged by real humans to be effective at solving a given task.
-
-See [the AICrowd competition page](https://www.aicrowd.com/challenges/neurips-2022-minerl-basalt-competition) for further details on the competition.
+# MineRL Agent
+## Acknowledgments
+- Forked from [minerllabs/basalt-2022-behavioural-cloning-baseline](https://github.com/csupika/basalt-2022-behavioural-cloning-baseline)
+- [YOLOv8 GitHub](https://github.com/ultralytics/ultralytics)
+- [YOLOv8 prediction code](https://docs.ultralytics.com/tasks/classify/#predict) `yolov8/predict.py`
+- [Minecraft run recorder](https://github.com/ryanrudes/colabgymrender/blob/main/colabgymrender/recorder.py) `utils/recorder/record.py`
 
 
-## Downloading the BASALT dataset
+Difference between the original MineRL Labs and my code can be found [here](https://github.com/minerllabs/basalt-2022-behavioural-cloning-baseline/compare/main...csupika:basalt-2022-behavioural-cloning-baseline:main)
 
-You can find the index files containing all the download URLs for the full BASALT dataset in the [OpenAI VPT repository at the bottom](https://github.com/openai/Video-Pre-Training#basalt-2022-dataset).
+Most of the changes was applied in:
+- [data_loader.py](https://github.com/minerllabs/basalt-2022-behavioural-cloning-baseline/compare/main...csupika:basalt-2022-behavioural-cloning-baseline:main#diff-e42ca25bb5510426ff2e770dc5dec52a2e8bce0c9a6ac8a51ec50277e98b7ddf)
+- [behavoral_cloning.py](https://github.com/minerllabs/basalt-2022-behavioural-cloning-baseline/compare/main...csupika:basalt-2022-behavioural-cloning-baseline:main#diff-45a5f8c20489ae9d62a9df8d836d0f96979c582de6e40488690cbaaa0a0d81bd)
 
-We have included a download utility (`utils/download_dataset.py`) to help you download the dataset. You can use it with the index files from the OpenAI VPT repository. For example, if you download the FindCave dataset index file, named `find-cave-Jul-28.json`, you can download first 100 demonstrations to `MineRLBasaltFindCave-v0` directory with:
+## Run MineRL Agent
+### I. Train VPT Model
+1) Download dataset with `utils/download_dataset.py`
+2) Setup parameters in `behavioural_cloning.py` & `train.py`
+3) Run `train.py`
 
-```
-python download_dataset.py --json-file find-cave-Jul-28.json --output-dir MineRLBasaltFindCave-v0 --num-demos 100
-```
+### II. Train YOLO model
+1) Get dataset by running `utils/sample_videos.py` or download from Roboflow
+    - [MineRL FindCave Inside Cave v1](https://universe.roboflow.com/minerl-findcave-u5lrz/minerl-findcave-inside-cave-v1)
+    - [MineRL FindCave Inside Cave v2: No Water Inside Cave](https://universe.roboflow.com/minerl-findcave-u5lrz/minerl-findcave-inside-cave-v2-no-water-inside-cave)
+2) Select pre-trained model based on your preference. You can find the specifications of the models [on their website.](https://docs.ultralytics.com/tasks/classify/#models)
+3) Train pre-trained YOLO model on dataset by running `yolov8/train_yolov8.py`
+- To evaluate the performance of your YOLO model, run `yolov8/eval_yolov8.py`
 
-Basic dataset statistics (note: one trajectory/demonstration may be split up into multiple videos):
-```
-Size  #Videos  Name
---------------------------------------------------
-146G  1399     MineRLBasaltBuildVillageHouse-v0
-165G  2833     MineRLBasaltCreateVillageAnimalPen-v0
-165G  5466     MineRLBasaltFindCave-v0
-175G  4230     MineRLBasaltMakeWaterfall-v0
-```
+### III. Run MineRL Agent
+1) Setup parameters in `test_FindCave.py`
+   - Optional: Setup Minecraft word seed and YOLO confidence level from `run_agent.py`
+1) Select the VPT model and weight to run the agent
+    - The VPT models were in this repo were all trained on `foundation-model-1x.model` and `foundation-model-1x.weights`.
+    - If you want to run your fine-tuned VPT model then use `train/<NAME OF YOUR MODEL>.weights`
+    - If you want to run the baseline model then run `foundation-model-1x.weights`
+    - Please note, it's essential to use the appropriate model and weights. If you used the 1x width model, then you must select the matching 1x width weight for either running or training. When using your freshly trained VPT model weights, opt for the 1x width model if that's the version you used for training.
+    - More information on the VPT models can be found on [OpenAI's repo](https://github.com/openai/Video-Pre-Training)
+2) Select the YOLO model to run the agent from `yolov8/runs/classify/train{yolo_training_no}/`
+3) Run the agent
+- Headless: `xvfb-run run.py` from the console
+- Headed: Set the show to `True` on line 96 in `run_agent.py` and then run.
+- The recordings of the run(s) will be saved to `video/`
 
-
-
-## Setting up
-
-Install [MineRL v1.0.0](https://github.com/minerllabs/minerl) (or newer) and the requirements for [OpenAI VPT](https://github.com/openai/Video-Pre-Training).
-
-Download the dataset following above instructions. Also download the 1x width foundational model [.weights](https://openaipublic.blob.core.windows.net/minecraft-rl/models/foundation-model-1x.weights) and [.model](https://openaipublic.blob.core.windows.net/minecraft-rl/models/foundation-model-1x.model) files for the OpenAI VPT model.
-
-Place these data files under `data` to match the following structure:
-
-```
-├── data
-│   ├── MineRLBasaltBuildVillageHouse-v0
-│   │   ├── Player70-f153ac423f61-20220707-111912.jsonl
-│   │   ├── Player70-f153ac423f61-20220707-111912.mp4
-│   │   └── ... rest of the files
-│   ├── MineRLBasaltCreateVillageAnimalPen-v0
-│   │   └── ... files as above
-│   ├── MineRLBasaltFindCave-v0
-│   │   └── ... files as above
-│   ├── MineRLBasaltMakeWaterfall-v0
-│   │   └── ... files as above
-│   └── VPT-models
-│       ├── foundation-model-1x.model
-│       └── foundation-model-1x.weights
-```
-
-
-## Training models
-
-Running following code will save a fine-tuned network for each task under `train` directory. This has been tested to fit into a 8GB GPU.
-
-```
-python train.py
-```
-
-## Visualizing/enjoying/evaluating models
-
-To run the trained model for `MineRLBasaltFindCave-v0`, run the following:
-
-```
-python run_agent.py --model data/VPT-models/foundation-model-1x.model --weights train/MineRLBasaltFindCave.weights --env MineRLBasaltFindCave-v0 --show
-```
-
-Change `FindCave` to other tasks to run for different tasks.
-
-## How to Submit a Model on AICrowd.
-
-**Note:** This repository is *not* submittable as-is. You first need to train the models, add them to the git repository and then submit to AICrowd.
-
-To submit this baseline agent follow the [submission instructions](https://github.com/minerllabs/basalt_2022_competition_submission_template/), but use this repo instead of the starter kit repo.
+# Get Fine-Tuned VPT Models From Git LFS 
+The VPT models trained by me are on Git LFS
+To download please follow these steps:
+1) `git lfs install`
+2) `git lfs fetch`
+3) Checkout or Pull: Depending on how you cloned the repository, you might need to perform a checkout or pull operation to get the VPT files trained by me.
+   - `git checkout main`
+   - `git pull origin main`
